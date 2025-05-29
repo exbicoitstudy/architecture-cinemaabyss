@@ -1,0 +1,64 @@
+@startuml
+!include <C4/C4_Container>
+
+
+AddRelTag("dashed", $textColor=$ARROW_FONT_COLOR, $lineColor=$ARROW_COLOR, $lineStyle=DashedLine())
+
+Person(usr, "Пользователь", "Ноутбуки, смарт ТВ, мобильные устройства")
+Container(front, "Web Application", "Single-Page App", "Фронтенд")
+
+System_Boundary(c0, "«Кинобездна»"){
+    Container(backend_api, "API Gateway", "", "Маршрутизация, проверка токенов")
+    System_Boundary(profile, "Домен профиль"){
+        Container(profile_back, "Профиль", "Микросервис", "Пользователи, просмотры, рейтинг, скидки")
+        ContainerDb(profile_db, "DB Профиля", "PostgreSQL")
+    }
+    System_Boundary(subscription, "Домен Подписки"){
+        Container(subscriptions_back, "Подписки", "Микросервис", "Работа с подписками")
+        ContainerDb(subscriptions_db, "DB Подписки", "PostgreSQL")
+    }
+    System_Boundary(payments, "Домен Платежи"){
+        Container(payments_back, "Платежи", "Микросервис", "Работа с платежами")
+        ContainerDb(payments_db, "DB Платежи", "PostgreSQL")
+    }
+    System_Boundary(movies, "Домен видео"){
+        Container(movies_back, "Видео", "Микросервис", "Видео, метаданные о фильмах (жанры, актёры, оценки).")
+        ContainerDb(movies_db, "DB Видео", "PostgreSQL")
+    }
+    ContainerQueue(queue, "Брокер сообщений", "AMPQ")
+    ContainerQueue(queue_integration, "Брокер сообщений для интеграций", "AMPQ")
+}
+System_Ext(payments_bank, "Платежная система", "Платежная система банка")
+System_Ext(s3, "Файловое хранилище", "s3")
+System_Ext(recommender_system, "", "Внешняя рекомендательная система")
+
+Rel(usr, front, "Регистрируется, привязывает устройства, смотрит телеметрию, настраивает сценарии работы", "HTTPS JSON")
+Rel(front, backend_api, "Запросы от фронта", "HTTPS JSON")
+
+Rel(backend_api, profile_back, "Регистрация, данные пользователя, подписки, рекомендации, рейтинг", "HTTPS JSON")
+Rel(backend_api, movies_back, "Каталог фильмов, просмотр одного фильма", "HTTPS JSON")
+
+Rel(backend_api, payments_back, "Оплате пользователем подписки", "HTTPS JSON")
+Rel(backend_api, subscriptions_back, "Оформление подписки", "HTTPS JSON")
+Rel(subscriptions_back, subscriptions_db, "Данные", "SQL")
+
+Rel_Neighbor(subscriptions_back, payments_back, "Оплата подписки", "HTTPS JSON")
+Rel_Neighbor(subscriptions_back, profile_back, "Получение данных профиля ", "HTTPS JSON")
+Rel(queue, subscriptions_back, "Результат оплаты подписки", "async", $tags="dashed")
+
+Rel(profile_back, profile_db, "Данные", "SQL")
+Rel(queue_integration, profile_back, "Получение рекомендаций", "async", $tags="dashed")
+Rel(recommender_system, queue_integration, "Рекомендации", "async", $tags="dashed")
+Rel(profile_back, queue, "Изменение рейтинга от пользователя", "async", $tags="dashed")
+
+Rel(queue, profile_back, "Список новинок", "async", $tags="dashed")
+
+Rel(payments_back, payments_db, "Данные", "SQL")
+Rel(payments_back, payments_bank, "эквайринг", "HTTPS JSON")
+Rel(payments_back, queue, "Результат оплаты подписки", "async", $tags="dashed")
+
+Rel(movies_back, movies_db, "Данные", "SQL")
+Rel(movies_back, s3, "Получение, загрузка файлов", "HTTPS JSON")
+Rel(queue, movies_back, "Изменение рейтинга от пользователя для изменения рейтинга фильма", "async", $tags="dashed")
+Rel(movies_back, queue, "Новый фильм", "async", $tags="dashed")
+@enduml
